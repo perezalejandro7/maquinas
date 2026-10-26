@@ -93,7 +93,7 @@ header.top{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:flex-end;justif
 
 /* Panel lateral */
 .scrim{position:fixed;inset:0;background:rgba(10,16,18,.45);z-index:20}
-.panel{position:fixed;top:0;right:0;bottom:0;width:min(560px,100%);background:var(--surface);z-index:21;display:flex;flex-direction:column;box-shadow:-8px 0 30px rgba(0,0,0,.18);
+.panel{position:fixed;top:0;right:0;bottom:0;width:min(680px,100%);background:var(--surface);z-index:21;display:flex;flex-direction:column;box-shadow:-8px 0 30px rgba(0,0,0,.18);
   padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);padding-right:env(safe-area-inset-right,0px)}
 .panel-head{padding:16px 20px 0;display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
 .panel-head h2{font-size:26px}
@@ -152,6 +152,34 @@ td.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums;white-space:n
 .who{font-size:14px;color:var(--muted)} .who b{color:var(--fg)}
 .banner.warnb{background:var(--warn-soft);color:var(--fg)}
 .btn:disabled{opacity:.6;cursor:wait}
+.hist{display:flex;flex-direction:column;gap:10px}
+.hist-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.hist-head h3,.insights h3{font-size:19px}
+.add-btn{width:34px;height:34px;padding:0;justify-content:center;font-size:22px;line-height:1;border-radius:50%;background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.add-btn.on{background:var(--surface);color:var(--muted);border-color:var(--line)}
+.mini-form{display:grid;grid-template-columns:150px 90px 1fr;gap:8px 10px;align-items:end;background:var(--bg);border-radius:8px;padding:10px 12px}
+.mini-form .wide{grid-column:span 1}
+.mini-form .field:nth-child(3){grid-column:3}
+.mini-form .field:nth-child(4){grid-column:1/3}
+.mini-form .field label{font-size:11.5px}
+.mini-form .field input{padding:5px 8px;font-size:14px;background:var(--surface)}
+.mini-actions{display:flex;gap:6px;justify-content:flex-end;grid-column:3}
+.hist-tbl{border-color:var(--line)}
+.hist-tbl table{font-size:14.5px}
+.hist-tbl td{padding:9px 10px}
+.hist-tbl td.falla{width:100%}
+.hist-tbl td.falla small{display:block;margin-top:2px}
+.hist-tbl tr.cur td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
+.hist-tbl th.r,.hist-tbl td.r{text-align:right}
+.hist-tbl td.del{padding:6px 6px 0 0;width:1%}
+.icon-del{border:none;background:none;color:var(--muted);font-size:18px;line-height:1;padding:4px 6px;border-radius:4px;opacity:.55}
+.icon-del:hover,.icon-del:focus-visible{color:var(--bad);background:var(--bad-soft);opacity:1}
+.insights{border-top:1px solid var(--line);padding-top:14px;display:flex;flex-direction:column;gap:8px}
+.insights ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.insights li{font-size:14px;padding:7px 10px 7px 12px;border-radius:6px;background:var(--bg);border-left:3px solid var(--none)}
+.insights li.warn{border-left-color:var(--warn);background:var(--warn-soft)}
+.insights li.bad{border-left-color:var(--bad);background:var(--bad-soft)}
+@media (max-width:520px){.mini-form{grid-template-columns:1fr 1fr}.mini-form .field:nth-child(3),.mini-form .field:nth-child(4){grid-column:1/-1}.mini-actions{grid-column:1/-1}}
 </style>
 </head>
 <body>
@@ -244,7 +272,7 @@ const isJefe=()=>!!perfil&&perfil.rol==='jefe';
 
 /* ---------- Mapeo base de datos ↔ app ---------- */
 const mapM=r=>({id:r.id,codigo:r.codigo||'',nombre:r.nombre,modelo:r.modelo||'',fabricante:r.fabricante||'',relacionBano:r.relacion_bano||'',cuerdas:r.cuerdas??'',carga:r.carga??'',tanques:r.tanques??'',litrajeMin:r.litraje_min??'',plc:r.plc||'',foto:r.foto_url||'',x:+r.x,y:+r.y,w:+r.w,h:+r.h});
-const mapMt=r=>({id:r.id,maquinaId:r.maquina_id,fecha:r.fecha,falla:r.falla,tiempo:r.tiempo_respuesta_h??'',obs:r.observaciones||''});
+const mapMt=r=>({id:r.id,maquinaId:r.maquina_id,fecha:r.fecha,creado:r.created_at||'',falla:r.falla,tiempo:r.tiempo_respuesta_h??'',obs:r.observaciones||''});
 const mapP=r=>({id:r.id,maquinaId:r.maquina_id,fecha:r.fecha,obs:r.observaciones||''});
 const DBCOL={nombre:'nombre',codigo:'codigo',modelo:'modelo',fabricante:'fabricante',relacionBano:'relacion_bano',cuerdas:'cuerdas',carga:'carga',tanques:'tanques',litrajeMin:'litraje_min',plc:'plc',w:'w',h:'h'};
 
@@ -403,7 +431,7 @@ $('#alerts').onclick=e=>{const b=e.target.closest('[data-open]');if(b)openPanel(
 
 /* ---------- Panel ---------- */
 let openId=null,tab='info',editInfo=false;
-function openPanel(id,t){openId=id;tab=t||'info';editInfo=false;$('#panel').hidden=false;$('#scrim').hidden=false;renderPanel();$('#pClose').focus()}
+function openPanel(id,t){if(id!==openId)mantFormOpen=false;openId=id;tab=t||'info';editInfo=false;$('#panel').hidden=false;$('#scrim').hidden=false;renderPanel();$('#pClose').focus()}
 function closePanel(){openId=null;$('#panel').hidden=true;$('#scrim').hidden=true}
 $('#pClose').onclick=closePanel;$('#scrim').onclick=closePanel;
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('#modal').hidden)closeModal();else if(openId)closePanel()}});
@@ -411,7 +439,7 @@ document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;ed
 
 function renderPanel(){
   const m=S.machines.find(x=>x.id===openId); if(!m){closePanel();return}
-  if(editInfo&&document.activeElement&&$('#infoForm')&&$('#infoForm').contains(document.activeElement))return; // no interrumpir mientras escribe
+  {const fa=document.activeElement,fo=$('#infoForm')||$('#mantForm');if(fa&&fo&&fo.contains(fa))return;} // no interrumpir mientras escribe
   const nm=S.mantenimientos.filter(x=>x.maquinaId===m.id).length, np=S.pasivados.filter(x=>x.maquinaId===m.id).length;
   $('#pTitle').textContent=m.nombre;
   $('#pEyebrow').textContent=[m.fabricante,m.modelo].filter(Boolean).join(' · ')||'Máquina';
@@ -445,19 +473,82 @@ function infoTab(m){
     <div class="spec"><div class="k">Lavado pasivado</div><div class="v">${esc(pasStatus(m.id).label)}</div></div>
   </div>${ce?`<div class="row end">${m.foto?'<button class="btn small" id="rmPhoto">Quitar foto</button>':''}<button class="btn" id="editInfo">Editar información</button></div>`:loginHint('editar la información')}`;
 }
+/* ---------- Mantenimientos ---------- */
+const MESES=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+const byNewest=(a,b)=>String(b.fecha).localeCompare(a.fecha)||String(b.creado||'').localeCompare(a.creado||'');
+const horas=x=>x.tiempo===''||x.tiempo==null||isNaN(+x.tiempo)?0:+x.tiempo;
+const fmtH=h=>(Math.round(h*10)/10).toLocaleString('es-CO')+' h';
+const sentence=t=>{t=String(t||'').trim().toLowerCase();return t.charAt(0).toUpperCase()+t.slice(1)};
+// Componentes o sistemas reconocidos en el texto de la falla
+const CATS=[
+  ['el molinete interno',/molinete/],['la turbina',/turbina/],['la bomba principal',/bomba principal/],['la bomba auxiliar',/bomba auxiliar/],
+  ['el intercambiador',/intercambiador/],['temperatura y vapor',/temperatura|calienta|vapor|enfriamiento/],['el llenado',/llenado|cuenta ?litros|celda/],
+  ['la dosificación',/dosific/],['la introducción',/introduc/],['los sensores',/sensor/],['el drenaje',/drenaje/],
+  ['los tanques',/tanque|transferencia|paso de bano/],['el PLC y la parte eléctrica',/\bplc\b|corto|variador|se apaga|electric|\bvx\b/],
+  ['tapas, escotillas y visores',/tapa|escotilla|visor/],['inyectores y filtros',/inyector|tobera|filtro/]];
+const SINJ=/sin justific/;
+const catsOf=t=>{const n=norm(t);return CATS.filter(([,re])=>re.test(n)).map(([c])=>c)};
+let mantFormOpen=false;
+
+function analisis(l){
+  if(!l.length)return [];
+  const out=[], hoy=parseISO(todayISO()), last=l[0], dLast=daysBetween(parseISO(last.fecha),hoy);
+  out.push({k:'info',t:`Último mantenimiento hace ${dLast} día${dLast===1?'':'s'} (${fmt(last.fecha)}): ${sentence(last.falla)}.`});
+  // Repeticiones en los últimos 30 días
+  const rec=l.filter(x=>daysBetween(parseISO(x.fecha),hoy)<=30&&!SINJ.test(norm(x.falla)));
+  const exact=new Map();rec.forEach(x=>{const k=norm(x.falla);exact.set(k,(exact.get(k)||0)+1)});
+  const topExact=[...exact].sort((a,b)=>b[1]-a[1])[0];
+  const catRec=new Map();rec.forEach(x=>catsOf(x.falla).forEach(c=>catRec.set(c,(catRec.get(c)||0)+1)));
+  const topCatRec=[...catRec].sort((a,b)=>b[1]-a[1])[0];
+  if(topExact&&topExact[1]>=2)out.push({k:'bad',t:`En los últimos 30 días se entregó a mantenimiento ${topExact[1]} veces por la misma causa: ${sentence(topExact[0])}.`});
+  else if(topCatRec&&topCatRec[1]>=2)out.push({k:'bad',t:`En los últimos 30 días entró ${topCatRec[1]} veces por problemas en ${topCatRec[0]}.`});
+  // Problema más frecuente en todo el historial
+  const cat=new Map();l.forEach(x=>catsOf(x.falla).forEach(c=>cat.set(c,(cat.get(c)||0)+1)));
+  const topCat=[...cat].sort((a,b)=>b[1]-a[1])[0];
+  if(topCat&&topCat[1]>=3){const pct=Math.round(topCat[1]/l.length*100);
+    const lc=l.find(x=>catsOf(x.falla).includes(topCat[0])), dc=daysBetween(parseISO(lc.fecha),hoy);
+    out.push({k:pct>=30?'warn':'info',t:`Máquina generalmente con problemas en ${topCat[0]}: ${topCat[1]} de ${l.length} fallas (${pct} %). La última fue hace ${dc} día${dc===1?'':'s'}.`});}
+  // Mes actual frente al promedio de los meses anteriores con registros
+  const ym=todayISO().slice(0,7), mesN=MESES[hoy.getMonth()];
+  const delMes=l.filter(x=>String(x.fecha).startsWith(ym));
+  const prev=new Map();l.filter(x=>String(x.fecha).slice(0,7)<ym).forEach(x=>{const k=String(x.fecha).slice(0,7);prev.set(k,(prev.get(k)||0)+1)});
+  const first=l[l.length-1].fecha.slice(0,7);
+  let nMeses=0;{let [y,m]=first.split('-').map(Number);const [cy,cm]=ym.split('-').map(Number);nMeses=(cy-y)*12+(cm-m)}
+  if(nMeses>=2){const prom=[...prev.values()].reduce((a,b)=>a+b,0)/nMeses;
+    if(delMes.length>prom*1.5&&delMes.length>=2)out.push({k:'warn',t:`En ${mesN} lleva ${delMes.length} fallas, por encima de su promedio de ${prom.toFixed(1).replace('.',',')} por mes.`});
+    else out.push({k:'info',t:`En ${mesN} lleva ${delMes.length} falla${delMes.length===1?'':'s'}. Su promedio es ${prom.toFixed(1).replace('.',',')} por mes.`});}
+  // Tiempo entre fallas
+  if(l.length>=3){const span=daysBetween(parseISO(l[l.length-1].fecha),parseISO(l[0].fecha));if(span>0)out.push({k:'info',t:`En promedio falla cada ${Math.round(span/(l.length-1))} días.`})}
+  // Reparación más larga en los últimos 90 días
+  const r90=l.filter(x=>daysBetween(parseISO(x.fecha),hoy)<=90&&horas(x)>0).sort((a,b)=>horas(b)-horas(a))[0];
+  if(r90&&horas(r90)>=8)out.push({k:'info',t:`La parada más larga de los últimos 90 días fue de ${fmtH(horas(r90))} (${fmt(r90.fecha)}): ${sentence(r90.falla)}.`});
+  // Registros sin causa
+  const sj=l.filter(x=>SINJ.test(norm(x.falla))).length;
+  if(sj>=2)out.push({k:'warn',t:`${sj} registros dicen "Sin justificación". Conviene detallar la causa para que el análisis sea más preciso.`});
+  return out;
+}
+
 function mantTab(m){
   const ce=canEdit();
-  const l=S.mantenimientos.filter(x=>x.maquinaId===m.id).sort((a,b)=>String(b.fecha).localeCompare(a.fecha));
-  const conT=l.filter(x=>x.tiempo!==''&&x.tiempo!=null), prom=conT.length?conT.reduce((s,x)=>s+(+x.tiempo),0)/conT.length:0;
+  const l=S.mantenimientos.filter(x=>x.maquinaId===m.id).sort(byNewest);
+  const hoy=new Date(), ym=todayISO().slice(0,7), mesN=MESES[hoy.getMonth()];
+  const delMes=l.filter(x=>String(x.fecha).startsWith(ym)), hMes=delMes.reduce((s,x)=>s+horas(x),0);
   const y=todayISO().slice(0,4), anio=l.filter(x=>String(x.fecha).startsWith(y)).length;
-  return `<div class="kpis"><div class="kpi"><b>${l.length}</b><span>fallas registradas</span></div><div class="kpi"><b>${anio}</b><span>en ${y}</span></div><div class="kpi"><b>${prom.toFixed(1)} h</b><span>respuesta promedio</span></div></div>
-  ${ce?`<form class="boxed" id="mantForm"><h3 style="font-size:17px">Registrar falla</h3><div class="form">
-    <div class="field"><label for="mf_fecha">Fecha del fallo</label><input id="mf_fecha" type="date" required value="${todayISO()}" max="${todayISO()}"></div>
-    <div class="field"><label for="mf_tiempo">Tiempo de respuesta (horas)</label><input id="mf_tiempo" type="number" min="0" step="0.05" required placeholder="1.5"></div>
-    <div class="field full"><label for="mf_falla">Falla</label><input id="mf_falla" required placeholder="Ej. fuga en sello de bomba"></div>
-    <div class="field full"><label for="mf_obs">Observaciones (opcional)</label><input id="mf_obs" placeholder="Repuesto usado, técnico, etc."></div>
-  </div><div class="row end"><button class="btn primary">Agregar registro</button></div></form>`:loginHint('registrar fallas')}
-  ${l.length?`<div class="tbl"><table><thead><tr><th>Fecha</th><th>Falla</th><th>Resp.</th>${ce?'<th></th>':''}</tr></thead><tbody>${l.map(x=>`<tr><td class="num">${fmt(x.fecha)}</td><td>${esc(x.falla)}${x.obs?`<br><small class="muted">${esc(x.obs)}</small>`:''}</td><td class="num">${x.tiempo===''||x.tiempo==null?'—':esc(x.tiempo)+' h'}</td>${ce?`<td><button class="btn small danger" data-delm="${x.id}" aria-label="Eliminar registro">×</button></td>`:''}</tr>`).join('')}</tbody></table></div>`:'<p class="empty">Sin fallas registradas para esta máquina.</p>'}`;
+  const form=ce&&mantFormOpen?`<form class="mini-form" id="mantForm">
+      <div class="field"><label for="mf_fecha">Fecha</label><input id="mf_fecha" type="date" required value="${todayISO()}" max="${todayISO()}"></div>
+      <div class="field"><label for="mf_tiempo">Horas</label><input id="mf_tiempo" type="number" min="0" step="0.05" required placeholder="1.5"></div>
+      <div class="field wide"><label for="mf_falla">Falla</label><input id="mf_falla" required placeholder="Ej. daño en la turbina"></div>
+      <div class="field wide"><label for="mf_obs">Observaciones</label><input id="mf_obs" placeholder="Opcional"></div>
+      <div class="mini-actions"><button type="button" class="btn small" id="mfCancel">Cancelar</button><button class="btn small primary">Guardar</button></div>
+    </form>`:'';
+  const ins=analisis(l);
+  return `<div class="kpis"><div class="kpi"><b>${l.length}</b><span>fallas registradas</span></div><div class="kpi"><b>${anio}</b><span>en ${y}</span></div><div class="kpi"><b>${fmtH(hMes)}</b><span>en mantenimiento en ${mesN} (${delMes.length} falla${delMes.length===1?'':'s'})</span></div></div>
+  <section class="hist">
+    <div class="hist-head"><h3>Historial de mantenimientos</h3>${ce?`<button class="btn add-btn ${mantFormOpen?'on':''}" id="mfToggle" aria-expanded="${mantFormOpen}" title="Registrar falla" aria-label="Registrar falla">${mantFormOpen?'×':'+'}</button>`:`<button class="btn small" data-login>Iniciar sesión para registrar</button>`}</div>
+    ${form}
+    ${l.length?`<div class="tbl hist-tbl"><table><thead><tr><th>Fecha</th><th>Falla</th><th class="r">Horas</th>${ce?'<th></th>':''}</tr></thead><tbody>${l.map(x=>`<tr${String(x.fecha).startsWith(ym)?' class="cur"':''}><td class="num">${fmt(x.fecha)}</td><td class="falla">${esc(sentence(x.falla))}${x.obs?`<small class="muted">${esc(x.obs)}</small>`:''}</td><td class="num r">${x.tiempo===''||x.tiempo==null?'—':fmtH(+x.tiempo)}</td>${ce?`<td class="del"><button class="icon-del" data-delm="${x.id}" aria-label="Eliminar registro" title="Eliminar">×</button></td>`:''}</tr>`).join('')}</tbody></table></div>`:'<p class="empty">Sin fallas registradas para esta máquina.</p>'}
+  </section>
+  ${ins.length?`<section class="insights"><h3>Análisis de la máquina</h3><ul>${ins.map(i=>`<li class="${i.k}">${esc(i.t)}</li>`).join('')}</ul><p class="hint">Calculado con el historial de esta máquina. Se actualiza solo con cada registro.</p></section>`:''}`;
 }
 function pasTab(m){
   const ce=canEdit(), st=pasStatus(m.id), l=S.pasivados.filter(x=>x.maquinaId===m.id).sort((a,b)=>String(b.fecha).localeCompare(a.fecha));
@@ -490,9 +581,11 @@ function bindPanel(m){
   const dm=$('#delMachine'); if(dm)dm.onclick=()=>confirmBox(`¿Eliminar ${esc(m.nombre)} con todos sus mantenimientos y lavados? No se puede deshacer.`,'Eliminar',async()=>{
     const {error}=await sb.from('hv_maquinas').delete().eq('id',m.id);if(error)return toast(errMsg(error));
     S.machines=S.machines.filter(x=>x.id!==m.id);S.mantenimientos=S.mantenimientos.filter(x=>x.maquinaId!==m.id);S.pasivados=S.pasivados.filter(x=>x.maquinaId!==m.id);closePanel();renderAll();toast('Máquina eliminada')});
+  const mt=$('#mfToggle'); if(mt)mt.onclick=()=>{mantFormOpen=!mantFormOpen;renderPanel();if(mantFormOpen)$('#mf_falla').focus()};
+  const mc=$('#mfCancel'); if(mc)mc.onclick=()=>{mantFormOpen=false;renderPanel()};
   const mf=$('#mantForm'); if(mf)mf.onsubmit=e=>{e.preventDefault();
     busy(mf.querySelector('.primary'),async()=>{const {data,error}=await sb.from('hv_mantenimientos').insert({maquina_id:m.id,fecha:$('#mf_fecha').value,falla:$('#mf_falla').value.trim(),tiempo_respuesta_h:numOrNull($('#mf_tiempo').value),observaciones:txtOrNull($('#mf_obs').value)}).select().single();
-      if(error)return toast(errMsg(error));S.mantenimientos.push(mapMt(data));renderAll();toast('Falla registrada')})};
+      if(error)return toast(errMsg(error));S.mantenimientos.push(mapMt(data));mantFormOpen=false;renderAll();toast('Falla registrada')})};
   const pf=$('#pasForm'); if(pf)pf.onsubmit=e=>{e.preventDefault();
     busy(pf.querySelector('.primary'),async()=>{const {data,error}=await sb.from('hv_pasivados').insert({maquina_id:m.id,fecha:$('#pf_fecha').value,observaciones:txtOrNull($('#pf_obs').value)}).select().single();
       if(error)return toast(errMsg(error));S.pasivados.push(mapP(data));renderAll();toast('Lavado pasivado registrado. El conteo del año arranca de nuevo.')})};
