@@ -1,0 +1,639 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0d6672">
+<title>Hoja de Vida de Máquinas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<style>
+/* Layout: barra superior de estado → plano de planta (SVG) → lista de alertas; ficha de máquina en panel lateral con 3 pestañas */
+:root{
+  --bg:#eef1f2; --surface:#ffffff; --floor:#f6f8f8; --grid:#dfe5e6; --line:#c9d2d4;
+  --fg:#1b2427; --muted:#5d6b70; --accent:#0d6672; --accent-soft:#d8ecee;
+  --machine:#e4eaeb; --machine-stroke:#6f8186; --tank:#ffffff;
+  --ok:#2f7d4f; --ok-soft:#dcefe3; --warn:#b26a00; --warn-soft:#fbecd2; --bad:#c2352b; --bad-soft:#f8dedb; --none:#8a979b; --none-soft:#e8ecec;
+  --f-display:"Barlow Condensed","Arial Narrow",Arial,sans-serif; --f-body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif; --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#121819; --surface:#1a2224; --floor:#161d1f; --grid:#232d30; --line:#2f3b3e;
+  --fg:#e5ecee; --muted:#93a3a8; --accent:#4fb3bf; --accent-soft:#183a3f;
+  --machine:#26312f; --machine-stroke:#7d9095; --tank:#1a2224;
+  --ok:#5cc188; --ok-soft:#173326; --warn:#e5a33c; --warn-soft:#3a2b12; --bad:#f06b5f; --bad-soft:#3d1c19; --none:#7f8d91; --none-soft:#242d30; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#121819; --surface:#1a2224; --floor:#161d1f; --grid:#232d30; --line:#2f3b3e;
+  --fg:#e5ecee; --muted:#93a3a8; --accent:#4fb3bf; --accent-soft:#183a3f;
+  --machine:#26312f; --machine-stroke:#7d9095; --tank:#1a2224;
+  --ok:#5cc188; --ok-soft:#173326; --warn:#e5a33c; --warn-soft:#3a2b12; --bad:#f06b5f; --bad-soft:#3d1c19; --none:#7f8d91; --none-soft:#242d30; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{min-height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:16px 40px}
+.wrap{max-width:1200px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+h1,h2,h3{font-family:var(--f-display);font-weight:700;letter-spacing:.01em;margin:0;text-wrap:balance}
+h1{font-size:30px;line-height:1.05}
+h2{font-size:20px}
+.eyebrow{font-family:var(--f-mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:7px 12px;font-weight:500;font-size:14px;display:inline-flex;gap:6px;align-items:center;white-space:nowrap}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.btn.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.btn.danger{color:var(--bad)}
+.btn.small{padding:4px 9px;font-size:13px}
+
+header.top{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:flex-end;justify-content:space-between}
+.tools{display:flex;flex-wrap:wrap;gap:8px}
+.stats{display:flex;flex-wrap:wrap;gap:8px}
+.stat{display:flex;align-items:baseline;gap:8px;padding:6px 12px;border-radius:999px;background:var(--surface);border:1px solid var(--line);font-size:13px}
+.stat b{font-family:var(--f-mono);font-size:15px;font-variant-numeric:tabular-nums}
+.stat.bad{background:var(--bad-soft);border-color:transparent;color:var(--bad)}
+.stat.warn{background:var(--warn-soft);border-color:transparent;color:var(--warn)}
+.banner{background:var(--accent-soft);color:var(--fg);border-radius:8px;padding:10px 14px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;font-size:14px}
+
+.plan-card{background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.plan-head{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--line)}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:12.5px;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.plan-scroll{overflow-x:auto}
+#plan{display:block;width:100%;max-width:980px;margin:0 auto;min-width:560px;height:auto;background:var(--floor);touch-action:none}
+#plan.editing{cursor:grab}
+.m-body{fill:var(--machine);stroke:var(--machine-stroke);stroke-width:1.5}
+.m-tank{fill:var(--tank);stroke:var(--machine-stroke);stroke-width:1.2}
+.m-rope{stroke:var(--machine-stroke);stroke-width:1;stroke-dasharray:3 3}
+.m-name{font-family:var(--f-display);font-weight:700;fill:var(--fg)}
+.wall{fill:none;stroke:var(--fg);stroke-width:3}
+.st-bad-m .m-body{fill:var(--bad-soft);stroke:var(--bad)}
+.st-warn-m .m-body{fill:var(--warn-soft);stroke:var(--warn)}
+.flag circle{stroke:var(--surface);stroke-width:2}.flag-bad circle{fill:var(--bad)}.flag-warn circle{fill:var(--warn)}
+.flag text{fill:#fff;font-family:var(--f-display);font-weight:700;font-size:17px}
+.m-sub{font-family:var(--f-mono);font-size:10px;fill:var(--muted)}
+.machine{cursor:pointer}
+.machine:hover .m-body,.machine:focus .m-body{stroke:var(--accent);stroke-width:2.5}
+.machine:focus{outline:none}
+.m-status{stroke:var(--surface);stroke-width:2}
+.st-ok{fill:var(--ok)} .st-warn{fill:var(--warn)} .st-bad{fill:var(--bad)} .st-none{fill:var(--none)}
+.alarm-ring{fill:none;stroke:var(--bad);stroke-width:3}
+@media (prefers-reduced-motion:no-preference){.alarm-ring{animation:pulse 1.6s ease-in-out infinite}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+
+.alerts{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.alert{display:flex;gap:12px;align-items:center;background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--none);border-radius:8px;padding:10px 12px;cursor:pointer;text-align:left;width:100%}
+.alert.bad{border-left-color:var(--bad)} .alert.warn{border-left-color:var(--warn)}
+.alert .days{font-family:var(--f-mono);font-size:20px;font-weight:500;min-width:54px;font-variant-numeric:tabular-nums}
+.alert.bad .days{color:var(--bad)} .alert.warn .days{color:var(--warn)}
+.alert small{color:var(--muted);display:block}
+.empty{color:var(--muted);font-size:14px;padding:6px 0}
+
+/* Panel lateral */
+.scrim{position:fixed;inset:0;background:rgba(10,16,18,.45);z-index:20}
+.panel{position:fixed;top:0;right:0;bottom:0;width:min(560px,100%);background:var(--surface);z-index:21;display:flex;flex-direction:column;box-shadow:-8px 0 30px rgba(0,0,0,.18);
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);padding-right:env(safe-area-inset-right,0px)}
+.panel-head{padding:16px 20px 0;display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.panel-head h2{font-size:26px}
+.x{border:none;background:none;font-size:26px;line-height:1;color:var(--muted);padding:2px 6px}
+.tabs{display:flex;gap:2px;padding:12px 20px 0;border-bottom:1px solid var(--line);overflow-x:auto}
+.tab{border:none;background:none;padding:9px 12px;font-family:var(--f-display);font-weight:600;font-size:16px;color:var(--muted);border-bottom:3px solid transparent;white-space:nowrap}
+.tab[aria-selected="true"]{color:var(--accent);border-bottom-color:var(--accent)}
+.tab .pill{font-family:var(--f-mono);font-size:11px;background:var(--bg);border-radius:999px;padding:1px 6px;margin-left:4px}
+.panel-body{flex:1;overflow-y:auto;padding:18px 20px 24px;display:flex;flex-direction:column;gap:16px}
+.photo{aspect-ratio:4/3;max-width:100%;width:100%;border-radius:8px;background:var(--bg);border:1px dashed var(--line);display:grid;place-items:center;overflow:hidden;color:var(--muted);font-size:14px;text-align:center;padding:0}
+.photo img{width:100%;height:100%;object-fit:cover}
+.specs{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.spec{padding:10px 12px;border-bottom:1px solid var(--line);min-width:0}
+.spec:nth-child(odd){border-right:1px solid var(--line)}
+.spec:nth-last-child(-n+2){border-bottom:none}
+.spec .k{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.spec .v{font-size:17px;font-weight:600;overflow-wrap:anywhere}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.row.end{justify-content:flex-end}
+.form{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form .full{grid-column:1/-1}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field label{font-size:12.5px;color:var(--muted);font-weight:500}
+.field input,.field select,.field textarea{border:1px solid var(--line);background:var(--bg);border-radius:6px;padding:8px 10px;width:100%}
+.field textarea{min-height:60px;resize:vertical}
+.boxed{border:1px solid var(--line);border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:12px}
+table{border-collapse:collapse;width:100%;font-size:14px}
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
+th{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);text-align:left;font-weight:500;padding:8px 10px;border-bottom:1px solid var(--line);background:var(--bg)}
+td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:none}
+td.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.status-big{border-radius:10px;padding:16px;display:flex;gap:16px;align-items:center}
+.status-big .n{font-family:var(--f-mono);font-size:40px;font-weight:500;line-height:1;font-variant-numeric:tabular-nums}
+.status-big.ok{background:var(--ok-soft);color:var(--ok)} .status-big.warn{background:var(--warn-soft);color:var(--warn)} .status-big.bad{background:var(--bad-soft);color:var(--bad)} .status-big.none{background:var(--none-soft);color:var(--muted)}
+.status-big p{margin:0;color:var(--fg);font-size:14px}
+.status-big strong{display:block;font-family:var(--f-display);font-size:19px}
+.progress{height:8px;border-radius:99px;background:var(--bg);overflow:hidden}
+.progress span{display:block;height:100%;background:currentColor}
+.kpis{display:flex;flex-wrap:wrap;gap:8px}
+.kpi{flex:1 1 120px;background:var(--bg);border-radius:8px;padding:8px 12px}
+.kpi b{font-family:var(--f-mono);font-size:20px;font-weight:500;display:block;font-variant-numeric:tabular-nums}
+.kpi span{font-size:12px;color:var(--muted)}
+
+/* Modal genérico */
+.modal{position:fixed;z-index:31;left:50%;top:50%;transform:translate(-50%,-50%);width:min(640px,calc(100% - 32px));max-height:calc(100% - 48px);overflow:auto;background:var(--surface);border-radius:10px;padding:20px;display:flex;flex-direction:column;gap:14px;box-shadow:0 20px 50px rgba(0,0,0,.3)}
+.modal-scrim{z-index:30}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:9px 16px;border-radius:8px;z-index:40;font-size:14px}
+.muted{color:var(--muted)}
+.hint{font-size:13px;color:var(--muted);margin:0}
+@media (max-width:520px){.form{grid-template-columns:1fr}.specs{grid-template-columns:1fr}.spec:nth-child(odd){border-right:none}.spec:nth-last-child(2){border-bottom:1px solid var(--line)}h1{font-size:25px}}
+
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.top-right{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:flex-end}
+.userbox{display:flex;gap:8px;align-items:center}
+.who{font-size:14px;color:var(--muted)} .who b{color:var(--fg)}
+.banner.warnb{background:var(--warn-soft);color:var(--fg)}
+.btn:disabled{opacity:.6;cursor:wait}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <div class="eyebrow">Tintorería · Planta</div>
+      <h1>Hoja de vida de máquinas</h1>
+    </div>
+    <div class="top-right">
+      <div class="stats" id="stats"></div>
+      <div class="userbox" id="userbox"></div>
+    </div>
+  </header>
+
+  <div class="banner warnb" id="netBanner" hidden></div>
+
+  <section class="plan-card">
+    <div class="plan-head">
+      <div class="legend">
+        <span><i style="background:var(--ok)"></i>Pasivado al día</span>
+        <span><i style="background:var(--warn)"></i>Vence en ≤ 30 días</span>
+        <span><i style="background:var(--bad)"></i>Le toca lavado pasivado</span>
+        <span><i style="background:var(--none)"></i>Sin registro</span>
+      </div>
+      <div class="tools">
+        <button class="btn" id="btnEdit" aria-pressed="false" data-auth>Mover máquinas</button>
+        <button class="btn" id="btnAdd" data-auth>+ Agregar máquina</button>
+        <button class="btn" id="btnImport" data-auth>Importar Excel de daños</button>
+        <button class="btn" id="btnExport">Descargar Excel</button>
+      </div>
+    </div>
+    <div class="plan-scroll">
+      <svg id="plan" viewBox="0 0 1050 830" role="img" aria-label="Plano de planta con las máquinas"></svg>
+    </div>
+  </section>
+
+  <section style="display:flex;flex-direction:column;gap:10px">
+    <h2>Lavados pasivados pendientes</h2>
+    <div class="alerts" id="alerts"><p class="empty">Cargando información…</p></div>
+  </section>
+</div>
+
+<div class="scrim" id="scrim" hidden></div>
+<aside class="panel" id="panel" hidden aria-modal="true" role="dialog" aria-labelledby="pTitle">
+  <div class="panel-head">
+    <div><div class="eyebrow" id="pEyebrow"></div><h2 id="pTitle"></h2></div>
+    <button class="x" id="pClose" aria-label="Cerrar">×</button>
+  </div>
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" data-tab="info">Información</button>
+    <button class="tab" role="tab" data-tab="mant">Mantenimientos</button>
+    <button class="tab" role="tab" data-tab="pas">Lavados pasivados</button>
+  </div>
+  <div class="panel-body" id="pBody"></div>
+</aside>
+
+<div class="scrim modal-scrim" id="mScrim" hidden></div>
+<div class="modal" id="modal" hidden role="dialog" aria-modal="true"></div>
+<input type="file" id="fileXlsx" accept=".xlsx,.xls,.csv" hidden>
+<input type="file" id="filePhoto" accept="image/*" hidden>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(function(){
+/* ---------- Conexión ---------- */
+const SB_URL='https://jpzzqdltsnfmavmgzjsl.supabase.co';
+const SB_KEY='sb_publishable_Esgf30w-wi3XrM27FwgYhw_GLUmAjkg';
+const DOMINIO='tintoreria.local';
+const CACHE='hv-maquinas-cache-v1';
+const VW=1050,VH=830,DAY=86400000;
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const todayISO=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
+const parseISO=s=>{const [y,m,d]=String(s).slice(0,10).split('-').map(Number);return new Date(y,m-1,d)};
+const fmtD=d=>d.toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'numeric'});
+const fmt=s=>s?fmtD(parseISO(s)):'—';
+const addYear=s=>{const d=parseISO(s);d.setFullYear(d.getFullYear()+1);return d};
+const daysBetween=(a,b)=>Math.round((b-a)/DAY);
+const numOrNull=v=>v===''||v==null||isNaN(+v)?null:+v;
+const txtOrNull=v=>{v=String(v??'').trim();return v===''?null:v};
+
+if(typeof supabase==='undefined'){document.body.insertAdjacentHTML('afterbegin','<p style="padding:16px">No se pudo cargar la conexión. Revisa el internet y recarga la página.</p>');return}
+const sb=supabase.createClient(SB_URL,SB_KEY,{auth:{persistSession:true,autoRefreshToken:true}});
+
+let S={machines:[],mantenimientos:[],pasivados:[]};
+let user=null,perfil=null,loaded=false;
+const canEdit=()=>!!user&&(!perfil||perfil.activo!==false);
+const isJefe=()=>!!perfil&&perfil.rol==='jefe';
+
+/* ---------- Mapeo base de datos ↔ app ---------- */
+const mapM=r=>({id:r.id,codigo:r.codigo||'',nombre:r.nombre,modelo:r.modelo||'',fabricante:r.fabricante||'',relacionBano:r.relacion_bano||'',cuerdas:r.cuerdas??'',carga:r.carga??'',tanques:r.tanques??'',litrajeMin:r.litraje_min??'',plc:r.plc||'',foto:r.foto_url||'',x:+r.x,y:+r.y,w:+r.w,h:+r.h});
+const mapMt=r=>({id:r.id,maquinaId:r.maquina_id,fecha:r.fecha,falla:r.falla,tiempo:r.tiempo_respuesta_h??'',obs:r.observaciones||''});
+const mapP=r=>({id:r.id,maquinaId:r.maquina_id,fecha:r.fecha,obs:r.observaciones||''});
+const DBCOL={nombre:'nombre',codigo:'codigo',modelo:'modelo',fabricante:'fabricante',relacionBano:'relacion_bano',cuerdas:'cuerdas',carga:'carga',tanques:'tanques',litrajeMin:'litraje_min',plc:'plc',w:'w',h:'h'};
+
+function errMsg(e){
+  const m=String(e&&(e.message||e.error_description||e)||'');
+  if(e&&e.code==='42501'||/row-level security|permission denied/i.test(m))return 'No tienes permiso para hacer este cambio. Inicia sesión con un usuario activo.';
+  if(/fetch|network|Failed to/i.test(m))return 'Sin conexión. Revisa el internet e intenta de nuevo.';
+  return m||'Ocurrió un error. Intenta de nuevo.';
+}
+async function fetchAll(table,order){
+  let out=[],from=0;
+  for(;;){const {data,error}=await sb.from(table).select('*').order(order,{ascending:true}).range(from,from+999);if(error)throw error;out=out.concat(data);if(data.length<1000)break;from+=1000}
+  return out;
+}
+async function load(){
+  try{
+    const [m,mt,p]=await Promise.all([fetchAll('hv_maquinas','created_at'),fetchAll('hv_mantenimientos','fecha'),fetchAll('hv_pasivados','fecha')]);
+    S={machines:m.map(mapM),mantenimientos:mt.map(mapMt),pasivados:p.map(mapP)};
+    try{localStorage.setItem(CACHE,JSON.stringify({t:Date.now(),S}))}catch(e){}
+    setNet('');
+  }catch(e){
+    let c=null;try{c=JSON.parse(localStorage.getItem(CACHE)||'null')}catch(_){}
+    if(c&&c.S){S=c.S;setNet('Sin conexión con la base de datos. Estás viendo la información descargada el '+new Date(c.t).toLocaleString('es-CO')+'. No se pueden guardar cambios hasta recuperar la conexión.')}
+    else setNet('No se pudo cargar la información. Revisa el internet y recarga la página.');
+  }
+  loaded=true;renderAll();
+}
+function setNet(t){$('#netBanner').hidden=!t;$('#netBanner').textContent=t}
+// Actualización en vivo: cuando otra persona guarda algo, se recarga
+let reloadT=null;
+function scheduleReload(){clearTimeout(reloadT);reloadT=setTimeout(()=>{if(drag){scheduleReload();return}load()},500)}
+sb.channel('hv-cambios')
+  .on('postgres_changes',{event:'*',schema:'public',table:'hv_maquinas'},scheduleReload)
+  .on('postgres_changes',{event:'*',schema:'public',table:'hv_mantenimientos'},scheduleReload)
+  .on('postgres_changes',{event:'*',schema:'public',table:'hv_pasivados'},scheduleReload)
+  .subscribe();
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&loaded)load()});
+
+/* ---------- Sesión ---------- */
+async function loadPerfil(){
+  perfil=null;if(!user)return;
+  const {data}=await sb.from('perfiles').select('usuario,nombre_corto,nombre,rol,activo').eq('id',user.id).maybeSingle();
+  perfil=data||null;
+}
+sb.auth.onAuthStateChange((ev,session)=>{
+  const nu=session?session.user:null;
+  if((nu&&nu.id)===(user&&user.id)&&ev!=='SIGNED_IN')return;
+  user=nu;setTimeout(async()=>{await loadPerfil();if(!canEdit()&&editing)toggleEdit(false);renderAuth();renderAll()},0);
+});
+function renderAuth(){
+  const ub=$('#userbox');
+  if(user){const n=perfil?(perfil.nombre_corto||perfil.usuario):(user.email||'').split('@')[0];
+    ub.innerHTML=`<span class="who"><b>${esc(n)}</b>${perfil?' · '+esc(perfil.rol):''}</span><button class="btn small" id="btnLogout">Salir</button>`;
+    $('#btnLogout').onclick=async()=>{await sb.auth.signOut();toast('Sesión cerrada')};
+  }else{ub.innerHTML=`<button class="btn primary" id="btnLogin">Iniciar sesión para registrar</button>`;$('#btnLogin').onclick=loginBox}
+  document.querySelectorAll('[data-auth]').forEach(b=>b.hidden=!canEdit());
+}
+function loginBox(){
+  openModal(`<h2>Iniciar sesión</h2><p class="hint">Usa el mismo usuario y contraseña de la bitácora de tintorería.</p>
+  <form id="lgForm" class="form"><div class="field full"><label for="lgUser">Usuario</label><input id="lgUser" autocomplete="username" autocapitalize="none" required placeholder="Ej. aperez"></div>
+  <div class="field full"><label for="lgPass">Contraseña</label><input id="lgPass" type="password" autocomplete="current-password" required></div>
+  <p class="hint full" id="lgErr" style="color:var(--bad)" hidden></p>
+  <div class="row end full"><button type="button" class="btn" id="lgCancel">Cancelar</button><button class="btn primary" id="lgGo">Entrar</button></div></form>`);
+  $('#lgUser').focus();$('#lgCancel').onclick=closeModal;
+  $('#lgForm').onsubmit=async e=>{e.preventDefault();
+    const u=$('#lgUser').value.trim().toLowerCase(), email=u.includes('@')?u:u+'@'+DOMINIO;
+    $('#lgGo').disabled=true;$('#lgGo').textContent='Entrando…';
+    const {error}=await sb.auth.signInWithPassword({email,password:$('#lgPass').value});
+    $('#lgGo').disabled=false;$('#lgGo').textContent='Entrar';
+    if(error){$('#lgErr').hidden=false;$('#lgErr').textContent=/invalid/i.test(error.message)?'Usuario o contraseña incorrectos.':errMsg(error);return}
+    closeModal();toast('Sesión iniciada');
+  };
+}
+
+/* ---------- Estado de lavado pasivado ---------- */
+function lastPas(id){let b=null;for(const p of S.pasivados)if(p.maquinaId===id&&(!b||p.fecha>b.fecha))b=p;return b}
+function pasStatus(id){
+  const p=lastPas(id); if(!p)return {k:'none',label:'Sin registro'};
+  const today=parseISO(todayISO()), due=addYear(p.fecha), left=daysBetween(today,due), since=daysBetween(parseISO(p.fecha),today);
+  const k=left<=0?'bad':left<=30?'warn':'ok';
+  return {k,left,since,due,last:p.fecha,label:k==='bad'?(left===0?'Vence hoy':'Vencido hace '+(-left)+' d'):left+' días restantes'};
+}
+
+/* ---------- Plano ---------- */
+let editing=false;
+const label=m=>m.codigo||m.nombre;
+function machineSVG(m){
+  const st=pasStatus(m.id), W=m.w||150, H=m.h||100, t=Math.max(0,+m.tanques||0), c=Math.max(0,+m.cuerdas||0), vert=H>W;
+  const tip=`${m.nombre} · Lavado pasivado: ${st.label}`;
+  let g=`<g class="machine st-${st.k}-m" data-id="${m.id}" transform="translate(${m.x},${m.y})" tabindex="0" role="button" aria-label="${esc(tip)}"><title>${esc(tip)}</title>`;
+  if(st.k==='bad')g+=`<rect class="alarm-ring" x="-6" y="-6" width="${W+12}" height="${H+12}" rx="9"/>`;
+  g+=`<rect class="m-body" width="${W}" height="${H}" rx="5"/>`;
+  const nc=Math.min(c,6);
+  for(let i=0;i<nc;i++){const f=(i+1)/(nc+1);g+=vert?`<line class="m-rope" y1="12" y2="${H-12}" x1="${W*f}" x2="${W*f}"/>`:`<line class="m-rope" x1="12" x2="${W-12}" y1="${H*f}" y2="${H*f}"/>`}
+  const nt=Math.min(t,Math.floor((W-12)/18));
+  for(let i=0;i<nt;i++){g+=`<circle class="m-tank" cx="${W-14-i*18}" cy="0" r="7"/>`}
+  const fs=Math.max(18,Math.min(30,W*0.36,H*0.36)), lab=String(label(m)), size=lab.length>4?Math.min(fs,W/(lab.length*0.62)):fs;
+  g+=`<text class="m-name" x="${W/2}" y="${H/2}" text-anchor="middle" dominant-baseline="central" style="font-size:${size.toFixed(1)}px">${esc(lab)}</text>`;
+  g+=`<circle class="m-status st-${st.k}" cx="${W-11}" cy="${H-11}" r="6"/>`;
+  if(st.k==='bad'||st.k==='warn')g+=`<g class="flag flag-${st.k}" transform="translate(${W},0)"><circle r="12"/><text y="1" text-anchor="middle" dominant-baseline="central">!</text></g>`;
+  return g+'</g>';
+}
+function renderPlan(){
+  const svg=$('#plan');
+  let s='<defs><pattern id="gr" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0H0V20" fill="none" stroke="var(--grid)" stroke-width="1"/></pattern></defs>';
+  s+=`<rect width="${VW}" height="${VH}" fill="url(#gr)"/>`;
+  s+=`<rect class="wall" x="10" y="10" width="1028" height="806"/><line class="wall" x1="164" y1="10" x2="164" y2="816"/><line class="wall" x1="468" y1="10" x2="468" y2="816"/>`;
+  s+=S.machines.map(machineSVG).join('');
+  if(loaded&&!S.machines.length)s+=`<text x="${VW/2}" y="${VH/2}" text-anchor="middle" fill="var(--muted)" font-size="20" font-family="var(--f-body)">No hay máquinas registradas.</text>`;
+  svg.innerHTML=s; svg.classList.toggle('editing',editing);
+}
+function renderStats(){
+  const st=S.machines.map(m=>pasStatus(m.id).k);
+  const bad=st.filter(k=>k==='bad').length, warn=st.filter(k=>k==='warn').length;
+  const thisMonth=todayISO().slice(0,7), mm=S.mantenimientos.filter(x=>String(x.fecha).startsWith(thisMonth)).length;
+  $('#stats').innerHTML=`<span class="stat"><b>${S.machines.length}</b> máquinas</span>`+
+    (bad?`<span class="stat bad"><b>${bad}</b> pasivado vencido</span>`:'')+
+    (warn?`<span class="stat warn"><b>${warn}</b> por vencer</span>`:'')+
+    `<span class="stat"><b>${mm}</b> fallas este mes</span>`;
+}
+function renderAlerts(){
+  if(!loaded)return;
+  const list=S.machines.map(m=>({m,st:pasStatus(m.id)})).filter(x=>x.st.k!=='ok')
+    .sort((a,b)=>{const o={bad:0,warn:1,none:2};return o[a.st.k]-o[b.st.k]||(a.st.left??0)-(b.st.left??0)});
+  $('#alerts').innerHTML=list.length?list.map(({m,st})=>`<button class="alert ${st.k}" data-open="${m.id}">
+      <span class="days">${st.k==='none'?'—':st.left<=0?'+'+(-st.left)+'d':st.left+'d'}</span>
+      <span><b>${esc(m.nombre)}</b><small>${st.k==='none'?'No tiene lavado pasivado registrado':st.k==='bad'?'Le toca lavado pasivado · último '+fmt(st.last):'Vence el '+fmtD(st.due)}</small></span>
+    </button>`).join(''):'<p class="empty">Todas las máquinas tienen el lavado pasivado al día.</p>';
+}
+function renderAll(){renderPlan();renderStats();renderAlerts();if(openId)renderPanel()}
+
+let drag=null;
+function svgPt(e){const svg=$('#plan'),p=svg.createSVGPoint();p.x=e.clientX;p.y=e.clientY;return p.matrixTransform(svg.getScreenCTM().inverse())}
+$('#plan').addEventListener('pointerdown',e=>{
+  const g=e.target.closest('.machine'); if(!g)return;
+  const m=S.machines.find(x=>x.id===g.dataset.id); if(!m)return;
+  if(!editing){openPanel(m.id);return}
+  const p=svgPt(e); drag={m,g,dx:p.x-m.x,dy:p.y-m.y,x0:m.x,y0:m.y}; $('#plan').setPointerCapture(e.pointerId);
+});
+$('#plan').addEventListener('pointermove',e=>{
+  if(!drag)return; const p=svgPt(e);
+  drag.m.x=Math.round(Math.max(12,Math.min(VW-(drag.m.w||150)-12,p.x-drag.dx))/2)*2;
+  drag.m.y=Math.round(Math.max(18,Math.min(VH-(drag.m.h||100)-12,p.y-drag.dy))/2)*2;
+  drag.g.setAttribute('transform',`translate(${drag.m.x},${drag.m.y})`);
+});
+$('#plan').addEventListener('pointerup',async()=>{
+  if(!drag)return; const d=drag; drag=null;
+  if(d.m.x===d.x0&&d.m.y===d.y0)return;
+  const {error}=await sb.from('hv_maquinas').update({x:d.m.x,y:d.m.y}).eq('id',d.m.id);
+  if(error){d.m.x=d.x0;d.m.y=d.y0;renderPlan();toast(errMsg(error))}
+});
+$('#plan').addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.closest('.machine')){e.preventDefault();openPanel(e.target.closest('.machine').dataset.id)}});
+function toggleEdit(v){editing=v;$('#btnEdit').classList.toggle('on',editing);$('#btnEdit').setAttribute('aria-pressed',editing);$('#btnEdit').textContent=editing?'Listo':'Mover máquinas';renderPlan()}
+$('#btnEdit').onclick=()=>{toggleEdit(!editing);toast(editing?'Arrastra las máquinas para ubicarlas. Cada movimiento se guarda solo.':'Posiciones guardadas')};
+$('#alerts').onclick=e=>{const b=e.target.closest('[data-open]');if(b)openPanel(b.dataset.open)};
+
+/* ---------- Panel ---------- */
+let openId=null,tab='info',editInfo=false;
+function openPanel(id,t){openId=id;tab=t||'info';editInfo=false;$('#panel').hidden=false;$('#scrim').hidden=false;renderPanel();$('#pClose').focus()}
+function closePanel(){openId=null;$('#panel').hidden=true;$('#scrim').hidden=true}
+$('#pClose').onclick=closePanel;$('#scrim').onclick=closePanel;
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('#modal').hidden)closeModal();else if(openId)closePanel()}});
+document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;editInfo=false;renderPanel()});
+
+function renderPanel(){
+  const m=S.machines.find(x=>x.id===openId); if(!m){closePanel();return}
+  if(editInfo&&document.activeElement&&$('#infoForm')&&$('#infoForm').contains(document.activeElement))return; // no interrumpir mientras escribe
+  const nm=S.mantenimientos.filter(x=>x.maquinaId===m.id).length, np=S.pasivados.filter(x=>x.maquinaId===m.id).length;
+  $('#pTitle').textContent=m.nombre;
+  $('#pEyebrow').textContent=[m.fabricante,m.modelo].filter(Boolean).join(' · ')||'Máquina';
+  document.querySelectorAll('.tab').forEach(b=>{b.setAttribute('aria-selected',b.dataset.tab===tab);
+    const n=b.dataset.tab==='mant'?nm:b.dataset.tab==='pas'?np:null;
+    b.innerHTML=({info:'Información',mant:'Mantenimientos',pas:'Lavados pasivados'})[b.dataset.tab]+(n!==null?`<span class="pill">${n}</span>`:'')});
+  $('#pBody').innerHTML=tab==='info'?infoTab(m):tab==='mant'?mantTab(m):pasTab(m);
+  bindPanel(m);
+}
+const FIELDS=[['nombre','Nombre','text'],['codigo','Número en el plano','text'],['modelo','Modelo','text'],['fabricante','Fabricante','text'],['relacionBano','Relación de baño','text','1:8'],['cuerdas','# de cuerdas','number'],['carga','Carga teórica (kg)','number'],['tanques','# de tanques','number'],['litrajeMin','Litraje mínimo (L)','number'],['plc','PLC','text','Ej. Siemens S7-1200'],['w','Ancho en el plano','number'],['h','Alto en el plano','number']];
+const loginHint=what=>`<div class="boxed"><p class="hint" style="margin:0">Para ${what} inicia sesión con tu usuario de la bitácora.</p><div class="row"><button class="btn primary" data-login>Iniciar sesión</button></div></div>`;
+function infoTab(m){
+  const ce=canEdit();
+  const inner=m.foto?`<img src="${esc(m.foto)}" alt="Foto de ${esc(m.nombre)}">`:(ce?'Toca para agregar la foto de la máquina':'Sin foto');
+  const photo=ce?`<button class="photo" id="photoBtn" title="Cambiar foto">${inner}</button>`:`<div class="photo">${inner}</div>`;
+  if(editInfo&&ce){
+    return photo+`<form class="form" id="infoForm">${FIELDS.map(([k,l,t,ph])=>`<div class="field ${k==='nombre'?'full':''}"><label for="f_${k}">${l}</label><input id="f_${k}" name="${k}" type="${t}" ${t==='number'?'min="0" step="any"':''} placeholder="${ph||''}" value="${esc(m[k])}" ${k==='nombre'?'required':''}></div>`).join('')}
+      <div class="row end full">${isJefe()?'<button type="button" class="btn danger" id="delMachine">Eliminar máquina</button>':''}<span style="flex:1"></span><button type="button" class="btn" id="cancelInfo">Cancelar</button><button class="btn primary" id="saveInfo">Guardar</button></div></form>`;
+  }
+  const v=(x,u)=>x===''||x==null?'—':esc(x)+(u||'');
+  return photo+`<div class="specs">
+    <div class="spec"><div class="k">Nombre</div><div class="v">${v(m.nombre)}</div></div>
+    <div class="spec"><div class="k">Modelo</div><div class="v">${v(m.modelo)}</div></div>
+    <div class="spec"><div class="k">Fabricante</div><div class="v">${v(m.fabricante)}</div></div>
+    <div class="spec"><div class="k">Relación de baño</div><div class="v">${v(m.relacionBano)}</div></div>
+    <div class="spec"><div class="k"># de cuerdas</div><div class="v">${v(m.cuerdas)}</div></div>
+    <div class="spec"><div class="k">Carga teórica</div><div class="v">${v(m.carga,' kg')}</div></div>
+    <div class="spec"><div class="k"># de tanques</div><div class="v">${v(m.tanques)}</div></div>
+    <div class="spec"><div class="k">Litraje mínimo</div><div class="v">${v(m.litrajeMin,' L')}</div></div>
+    <div class="spec"><div class="k">PLC</div><div class="v">${v(m.plc)}</div></div>
+    <div class="spec"><div class="k">Lavado pasivado</div><div class="v">${esc(pasStatus(m.id).label)}</div></div>
+  </div>${ce?`<div class="row end">${m.foto?'<button class="btn small" id="rmPhoto">Quitar foto</button>':''}<button class="btn" id="editInfo">Editar información</button></div>`:loginHint('editar la información')}`;
+}
+function mantTab(m){
+  const ce=canEdit();
+  const l=S.mantenimientos.filter(x=>x.maquinaId===m.id).sort((a,b)=>String(b.fecha).localeCompare(a.fecha));
+  const conT=l.filter(x=>x.tiempo!==''&&x.tiempo!=null), prom=conT.length?conT.reduce((s,x)=>s+(+x.tiempo),0)/conT.length:0;
+  const y=todayISO().slice(0,4), anio=l.filter(x=>String(x.fecha).startsWith(y)).length;
+  return `<div class="kpis"><div class="kpi"><b>${l.length}</b><span>fallas registradas</span></div><div class="kpi"><b>${anio}</b><span>en ${y}</span></div><div class="kpi"><b>${prom.toFixed(1)} h</b><span>respuesta promedio</span></div></div>
+  ${ce?`<form class="boxed" id="mantForm"><h3 style="font-size:17px">Registrar falla</h3><div class="form">
+    <div class="field"><label for="mf_fecha">Fecha del fallo</label><input id="mf_fecha" type="date" required value="${todayISO()}" max="${todayISO()}"></div>
+    <div class="field"><label for="mf_tiempo">Tiempo de respuesta (horas)</label><input id="mf_tiempo" type="number" min="0" step="0.05" required placeholder="1.5"></div>
+    <div class="field full"><label for="mf_falla">Falla</label><input id="mf_falla" required placeholder="Ej. fuga en sello de bomba"></div>
+    <div class="field full"><label for="mf_obs">Observaciones (opcional)</label><input id="mf_obs" placeholder="Repuesto usado, técnico, etc."></div>
+  </div><div class="row end"><button class="btn primary">Agregar registro</button></div></form>`:loginHint('registrar fallas')}
+  ${l.length?`<div class="tbl"><table><thead><tr><th>Fecha</th><th>Falla</th><th>Resp.</th>${ce?'<th></th>':''}</tr></thead><tbody>${l.map(x=>`<tr><td class="num">${fmt(x.fecha)}</td><td>${esc(x.falla)}${x.obs?`<br><small class="muted">${esc(x.obs)}</small>`:''}</td><td class="num">${x.tiempo===''||x.tiempo==null?'—':esc(x.tiempo)+' h'}</td>${ce?`<td><button class="btn small danger" data-delm="${x.id}" aria-label="Eliminar registro">×</button></td>`:''}</tr>`).join('')}</tbody></table></div>`:'<p class="empty">Sin fallas registradas para esta máquina.</p>'}`;
+}
+function pasTab(m){
+  const ce=canEdit(), st=pasStatus(m.id), l=S.pasivados.filter(x=>x.maquinaId===m.id).sort((a,b)=>String(b.fecha).localeCompare(a.fecha));
+  let big;
+  if(st.k==='none')big=`<div class="status-big none"><div class="n">—</div><p><strong>Sin lavado pasivado registrado</strong>Registra la fecha del último lavado para empezar a contar el año.</p></div>`;
+  else{const pct=Math.min(100,Math.max(0,st.since/365*100));
+    big=`<div class="status-big ${st.k}"><div class="n">${st.k==='bad'?-st.left:st.left}</div><div style="flex:1;min-width:0"><p><strong>${st.k==='bad'?'días de retraso. Le toca lavado pasivado':'días para el próximo lavado'}</strong>Último: ${fmt(st.last)} · Próximo: ${fmtD(st.due)} · Van ${st.since} días</p><div class="progress" style="margin-top:8px"><span style="width:${pct}%"></span></div></div></div>`}
+  return big+(ce?`<form class="boxed" id="pasForm"><h3 style="font-size:17px">Registrar lavado pasivado</h3><div class="form">
+    <div class="field"><label for="pf_fecha">Fecha del lavado</label><input id="pf_fecha" type="date" required value="${todayISO()}" max="${todayISO()}"></div>
+    <div class="field"><label for="pf_obs">Observación (opcional)</label><input id="pf_obs" placeholder="Proveedor, químico, etc."></div>
+  </div><p class="hint">La norma pide un lavado por año. El conteo arranca desde la fecha más reciente registrada.</p><div class="row end"><button class="btn primary">Registrar lavado</button></div></form>`:loginHint('registrar lavados pasivados'))+
+  (l.length?`<div class="tbl"><table><thead><tr><th>Fecha</th><th>Observación</th>${ce?'<th></th>':''}</tr></thead><tbody>${l.map(x=>`<tr><td class="num">${fmt(x.fecha)}</td><td>${esc(x.obs)||'<span class="muted">—</span>'}</td>${ce?`<td><button class="btn small danger" data-delp="${x.id}" aria-label="Eliminar registro">×</button></td>`:''}</tr>`).join('')}</tbody></table></div>`:'');
+}
+async function busy(btn,fn){if(btn){btn.disabled=true;btn.dataset.t=btn.textContent;btn.textContent='Guardando…'}
+  try{return await fn()}finally{if(btn&&btn.isConnected){btn.disabled=false;btn.textContent=btn.dataset.t}}}
+function bindPanel(m){
+  const B=$('#pBody');
+  B.querySelectorAll('[data-login]').forEach(b=>b.onclick=loginBox);
+  const pb=$('#photoBtn'); if(pb)pb.onclick=()=>{$('#filePhoto').value='';$('#filePhoto').click()};
+  const rp=$('#rmPhoto'); if(rp)rp.onclick=()=>confirmBox('¿Quitar la foto de esta máquina?','Quitar',async()=>{const {error}=await sb.from('hv_maquinas').update({foto_url:null}).eq('id',m.id);if(error)return toast(errMsg(error));m.foto='';renderAll();toast('Foto quitada')});
+  const ei=$('#editInfo'); if(ei)ei.onclick=()=>{editInfo=true;renderPanel()};
+  const ci=$('#cancelInfo'); if(ci)ci.onclick=()=>{editInfo=false;renderPanel()};
+  const f=$('#infoForm'); if(f)f.onsubmit=e=>{e.preventDefault();
+    const row={};FIELDS.forEach(([k,,t])=>{const v=f.elements[k].value;row[DBCOL[k]]=t==='number'?numOrNull(v):txtOrNull(v)});
+    if(!row.nombre)return toast('El nombre es obligatorio');
+    if(row.w==null)row.w=m.w; if(row.h==null)row.h=m.h;
+    busy($('#saveInfo'),async()=>{const {data,error}=await sb.from('hv_maquinas').update(row).eq('id',m.id).select().single();
+      if(error)return toast(errMsg(error));Object.assign(m,mapM(data));editInfo=false;renderAll();toast('Información guardada')});
+  };
+  const dm=$('#delMachine'); if(dm)dm.onclick=()=>confirmBox(`¿Eliminar ${esc(m.nombre)} con todos sus mantenimientos y lavados? No se puede deshacer.`,'Eliminar',async()=>{
+    const {error}=await sb.from('hv_maquinas').delete().eq('id',m.id);if(error)return toast(errMsg(error));
+    S.machines=S.machines.filter(x=>x.id!==m.id);S.mantenimientos=S.mantenimientos.filter(x=>x.maquinaId!==m.id);S.pasivados=S.pasivados.filter(x=>x.maquinaId!==m.id);closePanel();renderAll();toast('Máquina eliminada')});
+  const mf=$('#mantForm'); if(mf)mf.onsubmit=e=>{e.preventDefault();
+    busy(mf.querySelector('.primary'),async()=>{const {data,error}=await sb.from('hv_mantenimientos').insert({maquina_id:m.id,fecha:$('#mf_fecha').value,falla:$('#mf_falla').value.trim(),tiempo_respuesta_h:numOrNull($('#mf_tiempo').value),observaciones:txtOrNull($('#mf_obs').value)}).select().single();
+      if(error)return toast(errMsg(error));S.mantenimientos.push(mapMt(data));renderAll();toast('Falla registrada')})};
+  const pf=$('#pasForm'); if(pf)pf.onsubmit=e=>{e.preventDefault();
+    busy(pf.querySelector('.primary'),async()=>{const {data,error}=await sb.from('hv_pasivados').insert({maquina_id:m.id,fecha:$('#pf_fecha').value,observaciones:txtOrNull($('#pf_obs').value)}).select().single();
+      if(error)return toast(errMsg(error));S.pasivados.push(mapP(data));renderAll();toast('Lavado pasivado registrado. El conteo del año arranca de nuevo.')})};
+  B.querySelectorAll('[data-delm]').forEach(b=>b.onclick=()=>confirmBox('¿Eliminar este registro de mantenimiento?','Eliminar',async()=>{const {error}=await sb.from('hv_mantenimientos').delete().eq('id',b.dataset.delm);if(error)return toast(errMsg(error));S.mantenimientos=S.mantenimientos.filter(x=>x.id!==b.dataset.delm);renderAll();toast('Registro eliminado')}));
+  B.querySelectorAll('[data-delp]').forEach(b=>b.onclick=()=>confirmBox('¿Eliminar este lavado pasivado?','Eliminar',async()=>{const {error}=await sb.from('hv_pasivados').delete().eq('id',b.dataset.delp);if(error)return toast(errMsg(error));S.pasivados=S.pasivados.filter(x=>x.id!==b.dataset.delp);renderAll();toast('Registro eliminado')}));
+}
+
+// Foto: se reduce a 1200 px y se sube al almacenamiento de Supabase
+$('#filePhoto').onchange=e=>{
+  const file=e.target.files[0]; const m=S.machines.find(x=>x.id===openId); if(!file||!m)return;
+  const img=new Image(), url=URL.createObjectURL(file);
+  img.onload=()=>{
+    const k=Math.min(1,1200/Math.max(img.width,img.height)),c=document.createElement('canvas');c.width=Math.round(img.width*k);c.height=Math.round(img.height*k);c.getContext('2d').drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(url);
+    toast('Subiendo foto…');
+    c.toBlob(async blob=>{
+      const path=`${m.id}/${Date.now()}.jpg`;
+      const up=await sb.storage.from('hv-maquinas').upload(path,blob,{contentType:'image/jpeg',upsert:false});
+      if(up.error)return toast(errMsg(up.error));
+      const pub=sb.storage.from('hv-maquinas').getPublicUrl(path).data.publicUrl;
+      const {error}=await sb.from('hv_maquinas').update({foto_url:pub}).eq('id',m.id);
+      if(error)return toast(errMsg(error));
+      m.foto=pub;renderAll();toast('Foto actualizada');
+    },'image/jpeg',.82);
+  };
+  img.onerror=()=>toast('No se pudo leer esa imagen. Prueba con JPG o PNG.');
+  img.src=url;
+};
+
+/* ---------- Modales ---------- */
+function openModal(html){$('#modal').innerHTML=html;$('#modal').hidden=false;$('#mScrim').hidden=false}
+function closeModal(){$('#modal').hidden=true;$('#mScrim').hidden=true}
+$('#mScrim').onclick=closeModal;
+function confirmBox(text,label,fn){openModal(`<p style="margin:0;font-size:16px">${text}</p><div class="row end"><button class="btn" id="cNo">Cancelar</button><button class="btn primary" id="cYes">${label}</button></div>`);$('#cNo').onclick=closeModal;$('#cYes').onclick=()=>{closeModal();fn()};$('#cYes').focus()}
+function toast(t){const el=$('#toast');el.textContent=t;el.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(()=>el.hidden=true,3200)}
+
+function nextCode(){const nums=S.machines.map(m=>parseInt(m.codigo)).filter(n=>!isNaN(n));return String((nums.length?Math.max(...nums):0)+1)}
+$('#btnAdd').onclick=async()=>{
+  const code=nextCode();
+  const {data,error}=await sb.from('hv_maquinas').insert({codigo:code,nombre:'Máquina '+code,x:VW/2-60,y:VH-150,w:110,h:110}).select().single();
+  if(error)return toast(errMsg(error));
+  const m=mapM(data);S.machines.push(m);renderAll();openPanel(m.id);editInfo=true;renderPanel();toast('Máquina creada. Usa “Mover máquinas” para ubicarla.');
+};
+
+/* ---------- Descargar Excel ---------- */
+$('#btnExport').onclick=()=>{
+  if(typeof XLSX==='undefined')return toast('No cargó el generador de Excel. Revisa el internet.');
+  const nom=id=>(S.machines.find(m=>m.id===id)||{}).nombre||'';
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(S.machines.map(m=>{const st=pasStatus(m.id);return {'Número':m.codigo,'Nombre':m.nombre,'Modelo':m.modelo,'Fabricante':m.fabricante,'Relación de baño':m.relacionBano,'# cuerdas':m.cuerdas,'Carga teórica (kg)':m.carga,'# tanques':m.tanques,'Litraje mínimo (L)':m.litrajeMin,'PLC':m.plc,'Último lavado pasivado':st.last||'','Estado pasivado':st.label}})),'Máquinas');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(S.mantenimientos.slice().sort((a,b)=>String(b.fecha).localeCompare(a.fecha)).map(x=>({'Máquina':nom(x.maquinaId),'Fecha':x.fecha,'Falla':x.falla,'Tiempo de respuesta (h)':x.tiempo,'Observaciones':x.obs}))),'Mantenimientos');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(S.pasivados.slice().sort((a,b)=>String(b.fecha).localeCompare(a.fecha)).map(x=>({'Máquina':nom(x.maquinaId),'Fecha':x.fecha,'Observación':x.obs}))),'Lavados pasivados');
+  XLSX.writeFile(wb,'hoja-de-vida-maquinas-'+todayISO()+'.xlsx');
+};
+
+/* ---------- Importar Excel ---------- */
+$('#btnImport').onclick=()=>{$('#fileXlsx').value='';$('#fileXlsx').click()};
+const norm=s=>String(s??'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/\s+/g,' ').trim();
+const stripPre=s=>s.replace(/^(maquina|maq\.?|m)[\s#-]*0*/,'');
+const keysOf=m=>[norm(m.nombre),m.codigo&&norm(m.codigo),m.codigo&&'maquina '+norm(m.codigo)].filter(Boolean);
+function toISO(v){
+  if(v instanceof Date&&!isNaN(v))return v.getFullYear()+'-'+String(v.getMonth()+1).padStart(2,'0')+'-'+String(v.getDate()).padStart(2,'0');
+  if(typeof v==='number'){const d=new Date(Math.round((v-25569)*DAY));return toISO(new Date(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()))}
+  const s=String(v||'').trim(); let r;
+  if(r=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))return r[1]+'-'+r[2].padStart(2,'0')+'-'+r[3].padStart(2,'0');
+  if(r=s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})/)){const y=r[3].length===2?'20'+r[3]:r[3];return y+'-'+r[2].padStart(2,'0')+'-'+r[1].padStart(2,'0')}
+  return '';
+}
+function toHours(v){
+  if(v instanceof Date&&!isNaN(v))return +(v.getHours()+v.getMinutes()/60).toFixed(2);
+  if(typeof v==='number')return v;
+  const s=String(v||'').trim(); let r;
+  if(r=s.match(/^(\d{1,3}):(\d{2})/))return +(+r[1]+ +r[2]/60).toFixed(2);
+  const n=parseFloat(s.replace(',','.')); if(isNaN(n))return null;
+  return /min/i.test(s)?+(n/60).toFixed(2):n;
+}
+$('#fileXlsx').onchange=e=>{
+  const file=e.target.files[0]; if(!file)return;
+  if(typeof XLSX==='undefined'){toast('No cargó el lector de Excel. Revisa la conexión a internet.');return}
+  const rd=new FileReader();
+  rd.onload=()=>{let wb;try{wb=XLSX.read(rd.result,{type:'array',cellDates:true})}catch(err){toast('No se pudo leer el archivo');return}importDialog(wb)};
+  rd.readAsArrayBuffer(file);
+};
+function importDialog(wb){
+  let sheet=wb.SheetNames[0];
+  const guess={maq:/maquina|equipo|activo/,fecha:/fecha/,falla:/falla|dano|descrip|problema|causa/,tiempo:/tiempo|respuesta|duracion|horas/,obs:/observ|accion|solucion|comentario/};
+  const rows=()=>XLSX.utils.sheet_to_json(wb.Sheets[sheet],{header:1,raw:true,defval:''});
+  function byKey(){const mp=new Map();S.machines.forEach(m=>keysOf(m).forEach(k=>mp.set(k,m)));return mp}
+  const find=(mp,name)=>mp.get(norm(name))||mp.get(stripPre(norm(name)));
+  function parse(r){
+    const c=id=>+$('#'+id).value, iM=c('imMaq'),iF=c('imFecha'),iD=c('imFalla'),iT=c('imTiempo'),iO=c('imObs');
+    const mp=byKey(), newNames=new Map(); let skip=0; const ok=[];
+    r.slice(1).forEach(row=>{const maq=String(row[iM]??'').trim(), fecha=toISO(row[iF]), falla=String(row[iD]??'').trim();
+      if(!maq||!fecha||!falla){if(row.some(v=>v!==''))skip++;return}
+      if(!find(mp,maq))newNames.set(stripPre(norm(maq))||norm(maq),maq);
+      ok.push({maq,fecha,falla,tiempo:toHours(row[iT]),obs:iO>=0?txtOrNull(row[iO]):null})});
+    return {ok,newNames,skip};
+  }
+  function draw(){
+    const r=rows(), hdr=(r[0]||[]).map(String);
+    const pick=k=>hdr.findIndex(h=>guess[k].test(norm(h)));
+    const sel=(id,k,opt)=>`<div class="field"><label for="${id}">${({maq:'Columna de máquina',fecha:'Columna de fecha del fallo',falla:'Columna de la falla',tiempo:'Columna de tiempo de respuesta',obs:'Columna de observaciones'})[k]}</label><select id="${id}">${opt?'<option value="-1">(ninguna)</option>':''}${hdr.map((h,i)=>`<option value="${i}" ${pick(k)===i?'selected':''}>${esc(h)||'Columna '+(i+1)}</option>`).join('')}</select></div>`;
+    openModal(`<h2>Importar daños desde Excel</h2>
+      <div class="form">${wb.SheetNames.length>1?`<div class="field full"><label for="imSheet">Hoja</label><select id="imSheet">${wb.SheetNames.map(n=>`<option ${n===sheet?'selected':''}>${esc(n)}</option>`).join('')}</select></div>`:''}
+      ${sel('imMaq','maq')}${sel('imFecha','fecha')}${sel('imFalla','falla')}${sel('imTiempo','tiempo')}${sel('imObs','obs',true)}
+      <div class="field full" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="imCreate" style="width:auto"><label for="imCreate" style="font-size:14px;color:var(--fg)">Crear en el plano las máquinas que aún no existan</label></div></div>
+      <p class="hint" id="imPreview"></p>
+      <div class="row end"><button class="btn" id="imCancel">Cancelar</button><button class="btn primary" id="imGo">Importar</button></div>`);
+    const s=$('#imSheet'); if(s)s.onchange=()=>{sheet=s.value;draw()};
+    $('#imCancel').onclick=closeModal;
+    const prev=()=>{const p=parse(r);const nn=[...p.newNames.values()];$('#imPreview').innerHTML=`${Math.max(0,r.length-1)} filas en la hoja · <b>${p.ok.length}</b> con máquina, fecha y falla${nn.length?` · <b>${nn.length}</b> máquinas no están en el plano: ${esc(nn.slice(0,8).join(', '))}${nn.length>8?'…':''}. Si no marcas la casilla, esas filas se omiten.`:''}${p.skip?` · ${p.skip} filas incompletas se omiten`:''}`};
+    ['imMaq','imFecha','imFalla','imTiempo','imObs'].forEach(id=>$('#'+id).onchange=prev); prev();
+    $('#imGo').onclick=()=>busy($('#imGo'),async()=>{
+      const p=parse(r), create=$('#imCreate').checked;
+      if(create&&p.newNames.size){
+        let k=S.machines.length;
+        const rowsNew=[...p.newNames.values()].map(n=>({nombre:n,codigo:null,x:40+(k++%6)*160,y:VH-140,w:110,h:110}));
+        const {data,error}=await sb.from('hv_maquinas').insert(rowsNew).select();
+        if(error)return toast(errMsg(error));
+        data.forEach(d=>S.machines.push(mapM(d)));
+      }
+      const mp=byKey(), seen=new Set(S.mantenimientos.map(x=>x.maquinaId+'|'+x.fecha+'|'+norm(x.falla)));
+      const ins=[];let dup=0,miss=0;
+      p.ok.forEach(x=>{const m=find(mp,x.maq);if(!m){miss++;return}const key=m.id+'|'+x.fecha+'|'+norm(x.falla);if(seen.has(key)){dup++;return}seen.add(key);ins.push({maquina_id:m.id,fecha:x.fecha,falla:x.falla,tiempo_respuesta_h:x.tiempo,observaciones:x.obs})});
+      let added=0;
+      for(let i=0;i<ins.length;i+=500){
+        const {data,error}=await sb.from('hv_mantenimientos').insert(ins.slice(i,i+500)).select();
+        if(error){toast(`Se importaron ${added} registros y luego falló: ${errMsg(error)}`);await load();return}
+        data.forEach(d=>S.mantenimientos.push(mapMt(d)));added+=data.length;
+      }
+      closeModal();renderAll();
+      toast(`${added} registros importados${dup?` · ${dup} repetidos omitidos`:''}${miss?` · ${miss} sin máquina en el plano`:''}`);
+    });
+  }
+  draw();
+}
+
+/* ---------- Inicio ---------- */
+renderAuth();renderPlan();
+sb.auth.getSession().then(async({data})=>{user=data.session?data.session.user:null;await loadPerfil();renderAuth();await load()});
+})();
+</script>
+
+</body>
+</html>
